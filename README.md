@@ -1,19 +1,21 @@
 # AltCoin Buy Desk
 
-A lightweight front-end app that simulates purchasing alt coins in USD with a fee breakdown and estimated coin output.
+A lightweight crypto app for simulating alt coin purchases in USD with a fee breakdown and estimated coin output.
+
+## Tech stack
+- **JavaScript** frontend (`app.js`) for interactive UI and quote rendering.
+- **Python** backend (`server.py`) that serves static files and exposes quote/price APIs.
 
 ## Features
-- Choose from several popular alt coins (ETH, SOL, ADA, AVAX, DOT)
+- Choose from popular alt coins (ETH, SOL, ADA, AVAX, DOT)
 - Enter a USD amount to preview your purchase
 - Toggle instant execution to include an additional fee
 - Optional -5% price alert flag
-- Live reference price list in the UI
+- Live reference prices loaded from a Python API
 
 ## Run locally
-Because this app is static HTML/CSS/JS, you can run it with any static server:
-
 ```bash
-python3 -m http.server 4173
+python3 server.py
 ```
 
 Then open `http://localhost:4173`.
