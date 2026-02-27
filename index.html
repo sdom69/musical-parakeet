@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AltCoin Buy Desk</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>AltCoin Buy Desk</h1>
+        <p>Simulate purchasing popular alt coins with transparent fee calculations.</p>
+      </header>
+
+      <section class="card">
+        <h2>Purchase</h2>
+        <form id="purchase-form">
+          <label for="coin">Alt coin</label>
+          <select id="coin" name="coin" required>
+            <option value="ETH">Ethereum (ETH)</option>
+            <option value="SOL">Solana (SOL)</option>
+            <option value="ADA">Cardano (ADA)</option>
+            <option value="AVAX">Avalanche (AVAX)</option>
+            <option value="DOT">Polkadot (DOT)</option>
+          </select>
+
+          <label for="usd-amount">USD amount</label>
+          <input id="usd-amount" name="usdAmount" type="number" min="10" step="0.01" value="100" required />
+
+          <div class="grid">
+            <label class="checkbox">
+              <input id="instant" name="instant" type="checkbox" checked />
+              Instant execution (+0.8% fee)
+            </label>
+            <label class="checkbox">
+              <input id="price-alert" name="priceAlert" type="checkbox" />
+              Notify me if price drops 5%
+            </label>
+          </div>
+
+          <button type="submit">Preview purchase</button>
+        </form>
+      </section>
+
+      <section class="card" id="summary" aria-live="polite">
+        <h2>Order summary</h2>
+        <div id="summary-content" class="muted">Complete the form to preview your order.</div>
+      </section>
+
+      <section class="card">
+        <h2>Live reference prices</h2>
+        <ul id="prices"></ul>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
