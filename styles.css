@@ -6,7 +6,6 @@
   --muted: #a6b0cf;
   --accent: #6ea8fe;
   --ok: #64d2a7;
-  --warn: #ffd166;
 }
 
 * {
@@ -54,7 +53,6 @@ label {
   font-size: 0.95rem;
 }
 
-select,
 input,
 button {
   width: 100%;
@@ -63,11 +61,6 @@ button {
   background: #11162a;
   color: var(--text);
   padding: 0.65rem;
-}
-
-.grid {
-  display: grid;
-  gap: 0.4rem;
 }
 
 .checkbox {
@@ -100,29 +93,6 @@ button:hover {
   display: flex;
   justify-content: space-between;
   margin: 0.35rem 0;
-}
-
-.summary-line.total {
-  color: var(--ok);
-  font-weight: 700;
-  border-top: 1px solid #31395f;
-  padding-top: 0.4rem;
-}
-
-#prices {
-  margin: 0;
-  padding-left: 1rem;
-  color: var(--muted);
-}
-
-.badge {
-  display: inline-block;
-  margin-left: 0.4rem;
-  font-size: 0.75rem;
-  color: #201a00;
-  background: var(--warn);
-  border-radius: 999px;
-  padding: 0.15rem 0.5rem;
 }
 
 .hidden {
