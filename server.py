@@ -1,49 +1,64 @@
 #!/usr/bin/env python3
-"""Simple API + static file server for AltCoin Buy Desk."""
+"""Simple API + static file server for a legitimate Remote Administration Tool demo."""
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import os
+import time
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlparse
 
 HOST = "0.0.0.0"
 PORT = 4173
 
-PRICES = {
-    "ETH": 3188.12,
-    "SOL": 142.74,
-    "ADA": 0.61,
-    "AVAX": 37.28,
-    "DOT": 7.54,
+ADMIN_TOKEN = os.environ.get("RAT_ADMIN_TOKEN", "change-me")
+SERVER_STARTED_AT = time.time()
+STATE_LOCK = Lock()
+
+STATE = {
+    "maintenanceMode": False,
+    "serviceMessage": "All systems operational.",
+    "allowedOrigins": ["127.0.0.1"],
 }
-
-BASE_FEE_RATE = 0.012
-INSTANT_FEE_RATE = 0.008
-
-
-@dataclass
-class OrderRequest:
-    coin: str
-    usd_amount: float
-    instant: bool = True
 
 
 class AppHandler(SimpleHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
-        if parsed.path == "/api/prices":
-            self._send_json({"prices": PRICES})
+
+        if parsed.path == "/api/public/status":
+            self._send_json(public_status())
             return
+
+        if parsed.path == "/api/admin/status":
+            if not self._is_authorized_admin():
+                self._send_json({"error": "Unauthorized"}, status=HTTPStatus.UNAUTHORIZED)
+                return
+            self._send_json(admin_status())
+            return
+
+        if parsed.path == "/api/admin/config":
+            if not self._is_authorized_admin():
+                self._send_json({"error": "Unauthorized"}, status=HTTPStatus.UNAUTHORIZED)
+                return
+            self._send_json(current_config())
+            return
+
         return super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
-        if parsed.path != "/api/quote":
+
+        if parsed.path != "/api/admin/config":
             self.send_error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
+            return
+
+        if not self._is_authorized_admin():
+            self._send_json({"error": "Unauthorized"}, status=HTTPStatus.UNAUTHORIZED)
             return
 
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -51,17 +66,19 @@ class AppHandler(SimpleHTTPRequestHandler):
 
         try:
             payload = json.loads(raw_payload.decode("utf-8"))
-            req = OrderRequest(
-                coin=str(payload["coin"]).upper(),
-                usd_amount=float(payload["usdAmount"]),
-                instant=bool(payload.get("instant", False)),
-            )
-            quote = calculate_quote(req)
+            apply_config_update(payload)
+        except json.JSONDecodeError:
+            self._send_json({"error": "Invalid JSON body."}, status=HTTPStatus.BAD_REQUEST)
+            return
         except (KeyError, TypeError, ValueError):
-            self._send_json({"error": "Invalid request body."}, status=HTTPStatus.BAD_REQUEST)
+            self._send_json({"error": "Invalid config payload."}, status=HTTPStatus.BAD_REQUEST)
             return
 
-        self._send_json(quote)
+        self._send_json({"ok": True, "config": current_config()})
+
+    def _is_authorized_admin(self) -> bool:
+        provided_token = self.headers.get("X-Admin-Token", "")
+        return bool(provided_token) and provided_token == ADMIN_TOKEN
 
     def _send_json(self, payload: dict, status: HTTPStatus = HTTPStatus.OK) -> None:
         content = json.dumps(payload).encode("utf-8")
@@ -72,34 +89,60 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.wfile.write(content)
 
 
-def calculate_quote(req: OrderRequest) -> dict:
-    if req.coin not in PRICES:
-        raise ValueError("Unsupported coin")
-    if req.usd_amount < 10:
-        raise ValueError("Minimum order amount is $10")
+def public_status() -> dict:
+    with STATE_LOCK:
+        return {
+            "maintenanceMode": STATE["maintenanceMode"],
+            "serviceMessage": STATE["serviceMessage"],
+        }
 
-    coin_price = PRICES[req.coin]
-    base_fee = req.usd_amount * BASE_FEE_RATE
-    instant_fee = req.usd_amount * INSTANT_FEE_RATE if req.instant else 0.0
-    total_fees = base_fee + instant_fee
-    net_usd = req.usd_amount - total_fees
-    estimated_coin = net_usd / coin_price
 
-    return {
-        "coin": req.coin,
-        "coinPrice": coin_price,
-        "amountFunded": req.usd_amount,
-        "baseFee": base_fee,
-        "instantFee": instant_fee,
-        "netUsd": net_usd,
-        "estimatedCoin": estimated_coin,
-    }
+def admin_status() -> dict:
+    with STATE_LOCK:
+        return {
+            "service": "Remote Administration Tool",
+            "uptimeSeconds": round(time.time() - SERVER_STARTED_AT, 2),
+            "maintenanceMode": STATE["maintenanceMode"],
+            "allowedOrigins": STATE["allowedOrigins"],
+            "adminTokenConfigured": ADMIN_TOKEN != "change-me",
+        }
+
+
+def current_config() -> dict:
+    with STATE_LOCK:
+        return {
+            "maintenanceMode": STATE["maintenanceMode"],
+            "serviceMessage": STATE["serviceMessage"],
+            "allowedOrigins": STATE["allowedOrigins"],
+        }
+
+
+def apply_config_update(payload: dict) -> None:
+    maintenance_mode = payload["maintenanceMode"]
+    service_message = payload["serviceMessage"]
+    allowed_origins = payload["allowedOrigins"]
+
+    if not isinstance(maintenance_mode, bool):
+        raise TypeError("maintenanceMode must be boolean")
+    if not isinstance(service_message, str) or len(service_message.strip()) < 3:
+        raise ValueError("serviceMessage must be a meaningful string")
+    if not isinstance(allowed_origins, list) or not allowed_origins:
+        raise ValueError("allowedOrigins must be a non-empty list")
+
+    normalized_origins = [str(item).strip() for item in allowed_origins if str(item).strip()]
+    if not normalized_origins:
+        raise ValueError("allowedOrigins must contain at least one non-empty origin")
+
+    with STATE_LOCK:
+        STATE["maintenanceMode"] = maintenance_mode
+        STATE["serviceMessage"] = service_message.strip()
+        STATE["allowedOrigins"] = normalized_origins
 
 
 def main() -> None:
     web_root = Path(__file__).resolve().parent
     server = ThreadingHTTPServer((HOST, PORT), AppHandler)
-    print(f"Serving AltCoin Buy Desk at http://127.0.0.1:{PORT}")
+    print(f"Serving Remote Administration Tool at http://127.0.0.1:{PORT}")
     print(f"Static root: {web_root}")
     server.serve_forever()
 

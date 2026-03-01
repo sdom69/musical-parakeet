@@ -1,21 +1,39 @@
-# AltCoin Buy Desk
+# Remote Administration Tool (RAT)
 
-A lightweight crypto app for simulating alt coin purchases in USD with a fee breakdown and estimated coin output.
+A lightweight, legitimate administration console for service operations.
 
 ## Tech stack
-- **JavaScript** frontend (`app.js`) for interactive UI and quote rendering.
-- **Python** backend (`server.py`) that serves static files and exposes quote/price APIs.
+- **JavaScript** frontend (`app.js`) for public status display and authenticated admin controls.
+- **Python** backend (`server.py`) serving static files and token-protected admin APIs.
 
 ## Features
-- Choose from popular alt coins (ETH, SOL, ADA, AVAX, DOT)
-- Enter a USD amount to preview your purchase
-- Toggle instant execution to include an additional fee
-- Optional -5% price alert flag
-- Live reference prices loaded from a Python API
+- Public status endpoint for maintenance mode and service message.
+- Admin authentication via `X-Admin-Token`.
+- Admin configuration updates for:
+  - maintenance mode toggle
+  - service message
+  - allowed origins list
 
 ## Run locally
 ```bash
+export RAT_ADMIN_TOKEN="your-secure-token"
 python3 server.py
 ```
 
 Then open `http://localhost:4173`.
+
+## API quick reference
+Public:
+- `GET /api/public/status`
+
+Admin (requires `X-Admin-Token: <RAT_ADMIN_TOKEN>`):
+- `GET /api/admin/status`
+- `GET /api/admin/config`
+- `POST /api/admin/config` with JSON body:
+  ```json
+  {
+    "maintenanceMode": true,
+    "serviceMessage": "Scheduled maintenance in progress.",
+    "allowedOrigins": ["127.0.0.1", "localhost"]
+  }
+  ```

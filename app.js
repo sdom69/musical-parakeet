@@ -1,115 +1,118 @@
-const baseFeeRate = 0.012;
-const instantFeeRate = 0.008;
+const publicStatus = document.getElementById("public-status");
+const adminAuthForm = document.getElementById("admin-auth-form");
+const adminPanel = document.getElementById("admin-panel");
+const adminStatus = document.getElementById("admin-status");
+const adminConfigForm = document.getElementById("admin-config-form");
 
-const form = document.getElementById("purchase-form");
-const summaryContent = document.getElementById("summary-content");
-const pricesList = document.getElementById("prices");
+const maintenanceModeInput = document.getElementById("maintenance-mode");
+const serviceMessageInput = document.getElementById("service-message");
+const allowedOriginsInput = document.getElementById("allowed-origins");
 
-let prices = {};
+let adminToken = "";
 
-function usd(value) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-
-function renderPrices() {
-  pricesList.innerHTML = Object.entries(prices)
-    .map(([ticker, price]) => `<li>${ticker}: ${usd(price)}</li>`)
-    .join("");
-}
-
-function buildSummary(quote, priceAlert) {
-  summaryContent.innerHTML = `
-    <div class="summary-line"><span>Coin</span><strong>${quote.coin}</strong></div>
-    <div class="summary-line"><span>Market price</span><strong>${usd(quote.coinPrice)}</strong></div>
-    <div class="summary-line"><span>Amount funded</span><strong>${usd(quote.amountFunded)}</strong></div>
-    <div class="summary-line"><span>Base fee (1.2%)</span><strong>${usd(quote.baseFee)}</strong></div>
-    <div class="summary-line"><span>Instant fee (${quote.instantFee > 0 ? "0.8%" : "0%"})</span><strong>${usd(quote.instantFee)}</strong></div>
-    <div class="summary-line"><span>Net used to buy ${quote.coin}</span><strong>${usd(quote.netUsd)}</strong></div>
-    <div class="summary-line total"><span>Estimated ${quote.coin}</span><strong>${quote.estimatedCoin.toFixed(6)} ${quote.coin}</strong></div>
-    ${priceAlert ? '<p>Price alert enabled <span class="badge">-5%</span></p>' : '<p class="muted">No price alert configured.</p>'}
+function renderPublicStatus(data) {
+  publicStatus.innerHTML = `
+    <div class="summary-line"><span>Maintenance mode</span><strong>${data.maintenanceMode ? "ON" : "OFF"}</strong></div>
+    <div class="summary-line"><span>Message</span><strong>${data.serviceMessage}</strong></div>
   `;
 }
 
-function buildClientFallbackQuote({ coin, usdAmount, instant }) {
-  const coinPrice = prices[coin];
-  const baseFee = usdAmount * baseFeeRate;
-  const instantFee = instant ? usdAmount * instantFeeRate : 0;
-  const netUsd = usdAmount - baseFee - instantFee;
-  return {
-    coin,
-    coinPrice,
-    amountFunded: usdAmount,
-    baseFee,
-    instantFee,
-    netUsd,
-    estimatedCoin: netUsd / coinPrice,
-  };
-}
-
-async function fetchPrices() {
-  const response = await fetch("/api/prices");
+async function fetchPublicStatus() {
+  const response = await fetch("/api/public/status");
   if (!response.ok) {
-    throw new Error("Unable to load prices from server.");
+    throw new Error("Unable to load public status.");
   }
-  const data = await response.json();
-  prices = data.prices;
-  renderPrices();
+  return response.json();
 }
 
-async function requestQuote(payload) {
-  const response = await fetch("/api/quote", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+async function adminRequest(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Token": adminToken,
+      ...(options.headers ?? {}),
+    },
   });
 
   if (!response.ok) {
-    throw new Error("Unable to calculate quote from server.");
+    throw new Error(`Admin request failed (${response.status}).`);
   }
 
   return response.json();
 }
 
-form.addEventListener("submit", async (event) => {
+function setAdminFormValues(config) {
+  maintenanceModeInput.checked = Boolean(config.maintenanceMode);
+  serviceMessageInput.value = String(config.serviceMessage || "");
+  allowedOriginsInput.value = Array.isArray(config.allowedOrigins) ? config.allowedOrigins.join(", ") : "";
+}
+
+adminAuthForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const formData = new FormData(form);
-  const coin = formData.get("coin");
-  const usdAmount = Number(formData.get("usdAmount"));
-  const instant = Boolean(formData.get("instant"));
-  const priceAlert = Boolean(formData.get("priceAlert"));
+  const formData = new FormData(adminAuthForm);
+  adminToken = String(formData.get("adminToken") || "").trim();
 
-  if (!coin || Number.isNaN(usdAmount) || usdAmount < 10) {
-    summaryContent.textContent = "Enter at least $10 and choose a coin.";
+  if (!adminToken) {
+    adminStatus.textContent = "Enter a valid admin token.";
     return;
   }
 
   try {
-    const quote = await requestQuote({ coin, usdAmount, instant });
-    buildSummary(quote, priceAlert);
+    const [status, config] = await Promise.all([
+      adminRequest("/api/admin/status", { method: "GET" }),
+      adminRequest("/api/admin/config", { method: "GET" }),
+    ]);
+
+    setAdminFormValues(config);
+    adminPanel.classList.remove("hidden");
+    adminStatus.textContent = `${status.service} connected. Uptime: ${status.uptimeSeconds}s.`;
   } catch {
-    if (!prices[coin]) {
-      summaryContent.textContent = "Cannot calculate quote right now.";
-      return;
-    }
-    const fallbackQuote = buildClientFallbackQuote({ coin, usdAmount, instant });
-    buildSummary(fallbackQuote, priceAlert);
+    adminPanel.classList.add("hidden");
+    adminStatus.textContent = "Admin authentication failed. Verify your token.";
+  }
+});
+
+adminConfigForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!adminToken) {
+    adminStatus.textContent = "Authenticate first before changing configuration.";
+    return;
+  }
+
+  const maintenanceMode = maintenanceModeInput.checked;
+  const serviceMessage = serviceMessageInput.value.trim();
+  const allowedOrigins = allowedOriginsInput.value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  if (serviceMessage.length < 3 || allowedOrigins.length === 0) {
+    adminStatus.textContent = "Service message and allowed origins are required.";
+    return;
+  }
+
+  try {
+    const data = await adminRequest("/api/admin/config", {
+      method: "POST",
+      body: JSON.stringify({ maintenanceMode, serviceMessage, allowedOrigins }),
+    });
+    setAdminFormValues(data.config);
+    const status = await fetchPublicStatus();
+    renderPublicStatus(status);
+    adminStatus.textContent = "Configuration updated successfully.";
+  } catch {
+    adminStatus.textContent = "Failed to update configuration. Check token and payload.";
   }
 });
 
 (async function init() {
   try {
-    await fetchPrices();
+    const status = await fetchPublicStatus();
+    renderPublicStatus(status);
   } catch {
-    prices = {
-      ETH: 3188.12,
-      SOL: 142.74,
-      ADA: 0.61,
-      AVAX: 37.28,
-      DOT: 7.54,
-    };
-    renderPrices();
+    publicStatus.textContent = "Unable to load service status.";
   }
-
-  buildSummary(buildClientFallbackQuote({ coin: "ETH", usdAmount: 100, instant: true }), false);
 })();
