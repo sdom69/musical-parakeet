@@ -5,7 +5,13 @@ const form = document.getElementById("purchase-form");
 const summaryContent = document.getElementById("summary-content");
 const pricesList = document.getElementById("prices");
 
+const adminAuthForm = document.getElementById("admin-auth-form");
+const adminPanel = document.getElementById("admin-panel");
+const adminStatus = document.getElementById("admin-status");
+const adminPriceForm = document.getElementById("admin-price-form");
+
 let prices = {};
+let adminToken = "";
 
 function usd(value) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
@@ -70,6 +76,23 @@ async function requestQuote(payload) {
   return response.json();
 }
 
+async function adminRequest(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Token": adminToken,
+      ...(options.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Admin request failed (${response.status}).`);
+  }
+
+  return response.json();
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -94,6 +117,57 @@ form.addEventListener("submit", async (event) => {
     }
     const fallbackQuote = buildClientFallbackQuote({ coin, usdAmount, instant });
     buildSummary(fallbackQuote, priceAlert);
+  }
+});
+
+adminAuthForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const formData = new FormData(adminAuthForm);
+  adminToken = String(formData.get("adminToken") || "").trim();
+
+  if (!adminToken) {
+    adminStatus.textContent = "Enter a valid admin token.";
+    return;
+  }
+
+  try {
+    const status = await adminRequest("/api/admin/status", { method: "GET" });
+    adminPanel.classList.remove("hidden");
+    adminStatus.textContent = `${status.service} connected. Uptime: ${status.uptimeSeconds}s.`;
+  } catch {
+    adminPanel.classList.add("hidden");
+    adminStatus.textContent = "Admin authentication failed. Verify your token.";
+  }
+});
+
+adminPriceForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!adminToken) {
+    adminStatus.textContent = "Authenticate first before changing prices.";
+    return;
+  }
+
+  const formData = new FormData(adminPriceForm);
+  const coin = String(formData.get("coin") || "").toUpperCase();
+  const price = Number(formData.get("price"));
+
+  if (!coin || Number.isNaN(price) || price <= 0) {
+    adminStatus.textContent = "Enter a valid coin and positive price.";
+    return;
+  }
+
+  try {
+    const data = await adminRequest("/api/admin/prices", {
+      method: "POST",
+      body: JSON.stringify({ coin, price }),
+    });
+    prices = data.prices;
+    renderPrices();
+    adminStatus.textContent = `${coin} updated to ${usd(prices[coin])}.`;
+  } catch {
+    adminStatus.textContent = "Failed to update price. Check token and payload.";
   }
 });
 

@@ -44,7 +44,8 @@ header p {
   padding: 1rem;
 }
 
-form {
+form,
+.stack {
   display: grid;
   gap: 0.8rem;
 }
@@ -122,4 +123,15 @@ button:hover {
   background: var(--warn);
   border-radius: 999px;
   padding: 0.15rem 0.5rem;
+}
+
+.hidden {
+  display: none;
+}
+
+#admin-status {
+  padding: 0.6rem;
+  border-radius: 8px;
+  background: #0f152b;
+  border: 1px solid #2b355f;
 }

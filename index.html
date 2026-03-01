@@ -52,6 +52,36 @@
         <h2>Live reference prices</h2>
         <ul id="prices"></ul>
       </section>
+
+      <section class="card">
+        <h2>Remote Administration Tool (RAT)</h2>
+        <p class="muted">Authorized operators can inspect server status and update market prices in real time.</p>
+
+        <form id="admin-auth-form" class="stack">
+          <label for="admin-token">Admin token</label>
+          <input id="admin-token" name="adminToken" type="password" placeholder="Set RAT_ADMIN_TOKEN on server" />
+          <button type="submit">Connect admin session</button>
+        </form>
+
+        <div id="admin-panel" class="stack hidden" aria-live="polite">
+          <div id="admin-status" class="muted">Not connected.</div>
+
+          <form id="admin-price-form" class="stack">
+            <label for="admin-coin">Coin to update</label>
+            <select id="admin-coin" name="coin">
+              <option value="ETH">ETH</option>
+              <option value="SOL">SOL</option>
+              <option value="ADA">ADA</option>
+              <option value="AVAX">AVAX</option>
+              <option value="DOT">DOT</option>
+            </select>
+
+            <label for="admin-price">New price (USD)</label>
+            <input id="admin-price" name="price" type="number" min="0.00000001" step="0.00000001" required />
+            <button type="submit">Update price</button>
+          </form>
+        </div>
+      </section>
     </main>
 
     <script src="app.js"></script>
